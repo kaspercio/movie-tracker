@@ -1,6 +1,5 @@
-from typing import List
 from typing import Optional
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy import (
     DECIMAL, 

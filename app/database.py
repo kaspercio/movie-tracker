@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 import os
 from dotenv import load_dotenv
 
@@ -14,3 +14,5 @@ engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False}  # Only needed for SQLite
 )
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

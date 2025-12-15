@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# jwt info
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
@@ -19,11 +20,10 @@ def verify_password(user_password: str, hashed_password: str) -> bool:
     is_verified = pwd_context.verify(user_password, hashed_password)
     return is_verified
 
-def create_token(user_id: int, user_name: str, is_admin: bool) -> str:
+def create_token(user_id: int, user_name: str) -> str:
     payload = {
         "sub": str(user_id),
-        "name": user_name,
-        "admin": is_admin, 
+        "name": user_name, 
         "iat": time(),
         "exp": time() + int(ACCESS_TOKEN_EXPIRE)
     }

@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user
 from app.models import User
-import schemas
+from app.schemas import LoginRequest
 
 
 router = APIRouter()
@@ -15,7 +15,7 @@ async def root():
     print("Welcome to the homepage.")
 
 @router.post("/login")
-async def login(credentials : schemas.LoginRequest, db: Session = Depends(get_db)):
+async def login(credentials : LoginRequest, db: Session = Depends(get_db)):
     # look up username in db if it exists
     user = db.query(User).filter(User.username == credentials.username).first()
     if user:

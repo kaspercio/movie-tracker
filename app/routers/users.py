@@ -16,9 +16,12 @@ async def root():
 
 @router.post("/login")
 async def login(credentials : schemas.LoginRequest, db: Session = Depends(get_db)):
+    # look up username in db if it exists
     user = db.query(User).filter(User.username == credentials.username).first()
     if user:
+        # compare the entered password is the same as hashed
         if app.auth.verify_password(credentials.password, user.hashed_password):
+            # create a jwt
             new_token = app.auth.create_token(user.id, user.username)
             return new_token
         else:

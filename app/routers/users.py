@@ -10,10 +10,6 @@ from app.schemas import LoginRequest
 
 router = APIRouter()
 
-@router.get("/")
-async def root():
-    print("Welcome to the homepage.")
-
 @router.post("/login")
 async def login(credentials : LoginRequest, db: Session = Depends(get_db)):
     # look up username in db if it exists

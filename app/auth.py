@@ -20,6 +20,19 @@ def verify_password(user_password: str, hashed_password: str) -> bool:
     is_verified = pwd_context.verify(user_password, hashed_password)
     return is_verified
 
+def validate_password(user_password: str,) -> bool:
+    if 8 <= len(user_password) <= 25:
+        count = 0
+        if any(char.isdigit() for char in user_password):
+            count += 1
+        if any(char.isupper() for char in user_password) and any(char.islower() for char in user_password):
+            count += 1
+        if any(not char.isalnum() for char in user_password):
+            count += 1
+        if count > 1:
+            return True
+    return False
+
 def create_token(user_id: int, user_name: str) -> str:
     payload = {
         "sub": str(user_id),
@@ -34,6 +47,5 @@ def create_token(user_id: int, user_name: str) -> str:
 def verify_token(token: str) -> dict:
     decoded_payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     return decoded_payload
-
 
 

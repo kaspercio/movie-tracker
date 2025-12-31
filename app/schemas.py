@@ -4,3 +4,10 @@ from pydantic import BaseModel
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+# register endpoint schema
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    confirm_password: str
+    email: str

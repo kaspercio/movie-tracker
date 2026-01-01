@@ -27,10 +27,6 @@ async def login(credentials : LoginRequest, db: Session = Depends(get_db)):
     
 @router.post("/register")
 async def register(credentials: RegisterRequest, db: Session = Depends(get_db)):
-    print("test")
-    print(f"DEBUG: Password length: {len(credentials.password)}")
-    print(f"DEBUG: Password bytes: {len(credentials.password.encode('utf-8'))}")
-    print(f"DEBUG: Password value: {credentials.password}")
     # check all failure conditions first
     if credentials.password != credentials.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords don't match")
@@ -51,9 +47,6 @@ async def register(credentials: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already exists")
     
     # if we get here, create the user
-    print(f"DEBUG: Password length: {len(credentials.password)}")
-    print(f"DEBUG: Password bytes: {len(credentials.password.encode('utf-8'))}")
-    print(f"DEBUG: Password value: {credentials.password}")
     hashed_password = app.auth.hash_password(credentials.password)
     new_user = User(
         username=credentials.username,

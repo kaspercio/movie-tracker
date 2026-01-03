@@ -1,7 +1,6 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException
-import app.auth, re
-from pydantic import BaseModel
-from sqlalchemy import create_engine
+from fastapi import APIRouter, Depends, HTTPException
+import app.auth
+import re
 from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user
 from app.models import User
@@ -58,3 +57,10 @@ async def register(credentials: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(new_user)
     
     return {"message": f"Account created for {credentials.username}"}
+
+@router.get("/me")
+async def get_my_profile(current_user: dict = Depends(get_current_user)):
+    return {
+        "user_id": current_user["sub"],
+        "username": current_user["name"]
+    }

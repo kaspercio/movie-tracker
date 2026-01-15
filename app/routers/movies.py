@@ -14,12 +14,6 @@ async def add_watched_movie(
 ):
     user_id = int(current_user["sub"])
     
-    # TODO: implement logic
-    # 1. Check if movie exists in movies table
-    # 2. If not, return error (we'll fix this later with TMDB API)
-    # 3. Check if user already watched this movie
-    # 4. Create UserMovie entry
-    # 5. Return response
     movie = db.query(Movie).filter(Movie.tmdb_id == movie_data.tmdb_id).first()
     if not movie:
         raise HTTPException(status_code=404, detail="Movie does not exist in database.")

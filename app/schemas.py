@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 # login endpoint schema
@@ -24,3 +24,15 @@ class AddWatchedMovie(BaseModel):
         if v is not None and (v < 1 or v > 5):
             raise ValueError('Rating must be between 1 and 5')
         return v
+
+class WatchedMovieResponse(BaseModel):
+    tmdb_id: int
+    title: str
+    year: int
+    poster_url: Optional[str]
+    vote_average: Optional[float]
+    date_watched: date
+    user_rating: Optional[int]
+
+class AddReviewRequest(BaseModel):
+    review_text: str

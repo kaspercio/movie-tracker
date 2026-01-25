@@ -55,8 +55,32 @@ async def add_watched_movie(
     user_id = int(current_user["sub"])
     
     movie = db.query(Movie).filter(Movie.tmdb_id == movie_data.tmdb_id).first()
+
     if not movie:
-        raise HTTPException(status_code=404, detail="Movie does not exist in database.")
+        try:
+            url = f"{TMDB_BASE_URL}/movie/{movie_data.tmdb_id}"
+            params = {"api_key": TMDB_API_KEY}
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+        
+            tmdb_movie = response.json()
+        
+            movie = Movie(
+                tmdb_id=tmdb_movie["id"],
+                title=tmdb_movie["title"],
+                year=int(tmdb_movie["release_date"][:4]) if tmdb_movie.get("release_date") else None,
+                poster_url=f"https://image.tmdb.org/t/p/w500{tmdb_movie['poster_path']}" if tmdb_movie.get("poster_path") else None,
+                vote_average=tmdb_movie.get("vote_average"),
+                overview=tmdb_movie.get("overview")
+            )
+            db.add(movie)
+            db.commit()
+            db.refresh(movie)
+        
+        except requests.RequestException:
+            raise HTTPException(status_code=502, detail="Could not fetch movie details")
+        
+
 
     existing_entry = db.query(UserMovie).filter(
         UserMovie.tmdb_id == movie_data.tmdb_id,
@@ -105,7 +129,7 @@ async def get_watched_movies(
     
 @router.post("/movies/{tmdb_id}/review")
 async def add_review(
-    tmdb_id: int,  # From URL path
+    tmdb_id: int,  # from URL path
     review_data: AddReviewRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)

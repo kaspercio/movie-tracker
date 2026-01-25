@@ -3,8 +3,48 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_current_user, get_db
 from app.models import Movie, UserMovie, Review
 from app.schemas import AddWatchedMovie, WatchedMovieResponse, AddReviewRequest
+import requests
+import os
 
 router = APIRouter()
+
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
+
+@router.get("/movies/search")
+async def search_movies(
+    query: str,
+    current_user: dict = Depends(get_current_user)
+):
+    if not query or len(query.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Search query cannot be empty")
+    
+    try:
+        url = f"{TMDB_BASE_URL}/search/movie"
+        params = {
+            "api_key": TMDB_API_KEY,
+            "query": query
+        }
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        data = response.json()
+        results = data.get("results", [])[:10]  # limit to 10
+        
+        return [
+            {
+        "tmdb_id": movie["id"],
+        "title": movie["title"],
+        "year": int(movie["release_date"][:4]) if movie.get("release_date") else None,
+        "poster_url": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None,
+        "vote_average": movie.get("vote_average"),
+        "overview": movie.get("overview")
+            }
+            for movie in results
+        ]
+        
+    except requests.RequestException:
+        raise HTTPException(status_code=502, detail="Movie search service unavailable")
 
 @router.post("/movies/watched")
 async def add_watched_movie(

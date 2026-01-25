@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
 
 # login endpoint schema

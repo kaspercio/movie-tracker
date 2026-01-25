@@ -2,9 +2,50 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.dependencies import get_current_user, get_db
 from app.models import Movie, UserMovie, Review
-from app.schemas import AddWatchedMovie, WatchedMovieResponse, AddReviewRequest
+from app.schemas import AddWatchedMovie, WatchedMovieResponse, AddReviewRequest, UpdateWatchedMovie, UpdateReview, ReviewResponse
+from datetime import datetime
+import requests
+import os
 
 router = APIRouter()
+
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
+
+@router.get("/movies/search")
+async def search_movies(
+    query: str,
+    current_user: dict = Depends(get_current_user)
+):
+    if not query or len(query.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Search query cannot be empty")
+    
+    try:
+        url = f"{TMDB_BASE_URL}/search/movie"
+        params = {
+            "api_key": TMDB_API_KEY,
+            "query": query
+        }
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        data = response.json()
+        results = data.get("results", [])[:10]  # limit to 10
+        
+        return [
+            {
+        "tmdb_id": movie["id"],
+        "title": movie["title"],
+        "year": int(movie["release_date"][:4]) if movie.get("release_date") else None,
+        "poster_url": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None,
+        "vote_average": movie.get("vote_average"),
+        "overview": movie.get("overview")
+            }
+            for movie in results
+        ]
+        
+    except requests.RequestException:
+        raise HTTPException(status_code=502, detail="Movie search service unavailable")
 
 @router.post("/movies/watched")
 async def add_watched_movie(
@@ -15,8 +56,32 @@ async def add_watched_movie(
     user_id = int(current_user["sub"])
     
     movie = db.query(Movie).filter(Movie.tmdb_id == movie_data.tmdb_id).first()
+
     if not movie:
-        raise HTTPException(status_code=404, detail="Movie does not exist in database.")
+        try:
+            url = f"{TMDB_BASE_URL}/movie/{movie_data.tmdb_id}"
+            params = {"api_key": TMDB_API_KEY}
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+        
+            tmdb_movie = response.json()
+        
+            movie = Movie(
+                tmdb_id=tmdb_movie["id"],
+                title=tmdb_movie["title"],
+                year=int(tmdb_movie["release_date"][:4]) if tmdb_movie.get("release_date") else None,
+                poster_url=f"https://image.tmdb.org/t/p/w500{tmdb_movie['poster_path']}" if tmdb_movie.get("poster_path") else None,
+                vote_average=tmdb_movie.get("vote_average"),
+                overview=tmdb_movie.get("overview")
+            )
+            db.add(movie)
+            db.commit()
+            db.refresh(movie)
+        
+        except requests.RequestException:
+            raise HTTPException(status_code=502, detail="Could not fetch movie details")
+        
+
 
     existing_entry = db.query(UserMovie).filter(
         UserMovie.tmdb_id == movie_data.tmdb_id,
@@ -36,7 +101,56 @@ async def add_watched_movie(
     db.commit()
     db.refresh(new_user_movie)
 
-    return {"message": f"New Movie {movie_data.tmdb_id} addded to {user_id} table"}
+    return {"message": f"New Movie {movie_data.tmdb_id} added to {user_id} table"}
+
+@router.delete("/movies/watched/{tmdb_id}")
+async def delete_watched_movie(
+    tmdb_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_id = int(current_user["sub"])
+    
+    # find the UserMovie entry
+    existing_entry = db.query(UserMovie).filter(
+        UserMovie.tmdb_id == tmdb_id,
+        UserMovie.user_id == user_id
+        ).first()
+    # if not found, return 404
+    if not existing_entry:
+        raise HTTPException(status_code=404, detail=f"Movie: {tmdb_id} does not exist in user: {user_id} table")
+    # delete it
+    db.delete(existing_entry)
+    db.commit()
+    # return success message
+    return {"message": f"Movie {tmdb_id} has been removed from user: {user_id} table"}
+
+@router.patch("/movies/watched/{tmdb_id}")
+async def update_watched_movie(
+    tmdb_id: int,
+    update_data: UpdateWatchedMovie,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_id = int(current_user["sub"])
+    
+    # find the UserMovie entry
+    existing_entry = db.query(UserMovie).filter(
+        UserMovie.tmdb_id == tmdb_id,
+        UserMovie.user_id == user_id
+        ).first()
+    # if not found, return 404
+    if not existing_entry:
+        raise HTTPException(status_code=404, detail=f"Movie: {tmdb_id} does not exist in user: {user_id} table")
+    # update the fields that were provided (not None)
+    if update_data.date_watched is not None:
+        existing_entry.date_watched = update_data.date_watched
+    if update_data.user_rating is not None:
+        existing_entry.user_rating = update_data.user_rating
+    # commit
+    db.commit()
+    # return success message
+    return {"message": f"Movie {tmdb_id} successfully updated in user: {user_id} table"}
 
 @router.get("/movies/watched", response_model=list[WatchedMovieResponse])
 async def get_watched_movies(
@@ -65,7 +179,7 @@ async def get_watched_movies(
     
 @router.post("/movies/{tmdb_id}/review")
 async def add_review(
-    tmdb_id: int,  # From URL path
+    tmdb_id: int,  # from URL path
     review_data: AddReviewRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -94,4 +208,78 @@ async def add_review(
     db.commit()
     db.refresh(new_movie_review)
 
-    return {"message": f"New Movie {tmdb_id} added to user: {user_id} table"}
+    return {"message": f"Movie {tmdb_id} review added to user: {user_id} review table"}
+
+@router.delete("/movies/{tmdb_id}/review")
+async def delete_review(
+    tmdb_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_id = int(current_user["sub"])
+    
+    # find the Review entry
+    movie_review = db.query(Review).filter(
+        Review.tmdb_id == tmdb_id,
+        Review.user_id == user_id
+    ).first()
+    # if not found, return 404
+    if not movie_review:
+        raise HTTPException(status_code=404, detail=f"Movie {tmdb_id} has not been reviewed.")
+    # delete it
+    db.delete(movie_review)
+    db.commit()
+    # return success message
+    return {"message": f"Movie {tmdb_id} review has been removed from user: {user_id} review table"}
+
+@router.patch("/movies/{tmdb_id}/review")
+async def update_review(
+    tmdb_id: int,
+    update_data: UpdateReview,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_id = int(current_user["sub"])
+    
+    # find the Review entry
+    movie_review = db.query(Review).filter(
+        Review.tmdb_id == tmdb_id,
+        Review.user_id == user_id
+    ).first()
+    # if not found, return 404
+    if not movie_review:
+        raise HTTPException(status_code=404, detail=f"Movie {tmdb_id} has not been reviewed.")
+    # update review_text
+    movie_review.review_text = update_data.review_text
+    # update updated_at timestamp
+    movie_review.updated_at = datetime.now()
+    # commit
+    db.commit()
+    # return success message
+    return {"message": f"Movie {tmdb_id} review has been successfully updated for user's: {user_id} review table."}
+
+@router.get("/reviews", response_model=list[ReviewResponse])
+async def get_my_reviews(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user_id = int(current_user["sub"])
+    
+    # query Review joined with Movie
+    results = db.query(Review, Movie).join(
+        Movie, Review.tmdb_id == Movie.tmdb_id
+    ).filter(Review.user_id == user_id).all()
+
+    return [
+        {
+        "review_id": review.review_id,
+        "tmdb_id": review.tmdb_id,
+        "title": movie.title,
+        "year": movie.year,
+        "poster_url": movie.poster_url,
+        "review_text": review.review_text,
+        "created_at": review.created_at,
+        "updated_at": review.updated_at
+    }
+    for review, movie in results
+    ]
